@@ -256,6 +256,7 @@ export class Overlay {
     this.toolbar.setMode(mode);
     this.hoverBox.hide();
     this.targetElement = null;
+    sendMessage({ type: 'SET_STATE', state: { mode } }).catch(console.error);
   }
 
   public toggleMode() {
@@ -416,12 +417,19 @@ export class Overlay {
     if (this.isPaused) {
       this.hoverBox.hide();
     }
+    sendMessage({ type: 'SET_STATE', state: { isPaused: this.isPaused } }).catch(console.error);
   }
 
   toggleMarkers() {
     this.markersVisible = !this.markersVisible;
     this.markerManager.setVisible(this.markersVisible);
     this.toolbar.setMarkersVisible(this.markersVisible);
+    sendMessage({ type: 'SET_STATE', state: { markersVisible: this.markersVisible } }).catch(console.error);
+  }
+
+  /** Re-anchor markers after the page has painted or reflowed. */
+  refreshMarkerPositions() {
+    this.markerManager.updatePositions(this.feedbackManager.getAll());
   }
 
   async copyFeedback() {

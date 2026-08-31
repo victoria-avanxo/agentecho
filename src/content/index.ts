@@ -1,12 +1,21 @@
 import { Overlay } from './overlay/Overlay';
 import { FeedbackManager } from './feedback/FeedbackManager';
 import { getSettings, getFeedback } from '../shared/storage';
+import { sendMessage } from '../shared/messaging';
+import type { OverlayMode } from '../shared/types';
+
+interface RestoredState {
+  isActive: boolean;
+  isPaused: boolean;
+  markersVisible: boolean;
+  mode: OverlayMode;
+}
 
 let overlay: Overlay | null = null;
 let feedbackManager: FeedbackManager | null = null;
 let currentUrl: string = window.location.href;
 
-async function initializeOverlay() {
+async function initializeOverlay(restore?: Partial<RestoredState>) {
   if (overlay) return;
 
   const settings = await getSettings();
@@ -16,6 +25,48 @@ async function initializeOverlay() {
   feedbackManager = new FeedbackManager(currentUrl, feedback);
   overlay = new Overlay(settings, feedbackManager);
   overlay.activate();
+
+  // Restore the view state the tab had before the reload.
+  if (restore) {
+    if (restore.mode) overlay.setMode(restore.mode);
+    if (restore.markersVisible === false) overlay.toggleMarkers();
+    if (restore.isPaused) overlay.togglePause();
+  }
+
+  // Frameworks often paint after document_idle, so saved copy changes are
+  // re-applied a few times before giving up on elements that never appear.
+  scheduleTextEditReapply();
+}
+
+/**
+ * Re-apply saved text edits on a short backoff. Each pass is a no-op for
+ * elements already carrying the edited copy, so repeats are harmless.
+ */
+function scheduleTextEditReapply() {
+  const delays = [0, 100, 300, 800, 1500];
+  for (const delay of delays) {
+    setTimeout(() => {
+      if (!overlay?.isActive) return;
+      overlay.applySavedTextEdits();
+      overlay.refreshMarkerPositions();
+    }, delay);
+  }
+}
+
+/**
+ * On load, ask the background whether the overlay was active in this tab and
+ * bring it back if so, together with its markers and applied copy changes.
+ */
+async function restoreIfActive() {
+  try {
+    const state = await sendMessage<RestoredState>({ type: 'GET_STATE' });
+    if (state?.isActive) {
+      await initializeOverlay(state);
+    }
+  } catch (error) {
+    // Background not reachable (e.g. extension reloading); nothing to restore.
+    console.debug('AgentEcho: could not restore overlay state', error);
+  }
 }
 
 function deactivateOverlay() {
@@ -53,6 +104,7 @@ async function handleUrlChange() {
     // Re-apply saved copy changes, then load markers for the new URL
     overlay.applySavedTextEdits();
     overlay.loadExistingMarkers();
+    scheduleTextEditReapply();
   }
 }
 
@@ -204,3 +256,6 @@ document.addEventListener('keydown', (e) => {
 
 // Setup URL monitoring for SPA navigation detection
 setupUrlMonitoring();
+
+// Bring the overlay back if this tab had it active before the reload.
+restoreIfActive();
