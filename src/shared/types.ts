@@ -21,6 +21,12 @@ export interface FeedbackItem {
 export interface TextEditInfo {
   originalText: string;
   newText: string;
+  /**
+   * Index of the edited text run among its parent's non-empty text nodes.
+   * Absent means the whole element's text was edited (the only shape that
+   * existed before inline markup was supported).
+   */
+  textNodeIndex?: number;
 }
 
 export interface ElementInfo {

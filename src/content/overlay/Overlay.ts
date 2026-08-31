@@ -4,6 +4,7 @@ import { Toolbar } from './Toolbar';
 import { FeedbackModal } from './FeedbackModal';
 import { ElementAnalyzer } from '../analyzers/ElementAnalyzer';
 import { TextEditor } from './TextEditor';
+import type { EditTarget } from './TextEditor';
 import type { ExtensionSettings, FeedbackItem, OverlayMode, TextEditInfo } from '../../shared/types';
 import type { FeedbackManager } from '../feedback/FeedbackManager';
 import { sendMessage } from '../../shared/messaging';
@@ -54,6 +55,8 @@ export class Overlay {
   private targetElement: HTMLElement | null = null;
   private isModalOpen = false;
   private mode: OverlayMode = 'comment';
+  /** Text run under the cursor while in text mode. */
+  private textTarget: EditTarget | null = null;
 
   constructor(settings: ExtensionSettings, feedbackManager: FeedbackManager) {
     this.settings = settings;
@@ -118,12 +121,22 @@ export class Overlay {
     }
 
     if (target instanceof HTMLElement) {
-      // In text mode only elements whose content is pure text can be picked.
-      if (this.mode === 'text' && !TextEditor.isEditableTextElement(target)) {
-        this.hoverBox.hide();
-        this.targetElement = null;
+      if (this.mode === 'text') {
+        // Resolve the exact run of text under the cursor and outline that,
+        // rather than the whole block it lives in.
+        const editTarget = TextEditor.resolveTarget(target, e.clientX, e.clientY);
+        if (!editTarget) {
+          this.hoverBox.hide();
+          this.targetElement = null;
+          this.textTarget = null;
+          return;
+        }
+        this.textTarget = editTarget;
+        this.targetElement = target;
+        this.hoverBox.showRect(TextEditor.targetRect(editTarget));
         return;
       }
+
       this.hoverBox.show(target);
       this.targetElement = target;
     }
@@ -157,7 +170,7 @@ export class Overlay {
       e.stopPropagation();
 
       if (this.mode === 'text') {
-        this.startTextEdit(this.targetElement);
+        this.startTextEdit(e.clientX, e.clientY);
       } else {
         this.promptForFeedback(this.targetElement);
       }
@@ -175,12 +188,16 @@ export class Overlay {
     // (do nothing, let event propagate)
   };
 
-  private startTextEdit(element: HTMLElement) {
+  private startTextEdit(x: number, y: number) {
+    const target =
+      this.textTarget ??
+      (this.targetElement ? TextEditor.resolveTarget(this.targetElement, x, y) : null);
+
     this.hoverBox.hide();
-    if (!this.textEditor.start(element)) {
-      // Not a pure-text element; nothing to edit.
-      return;
-    }
+    this.textTarget = null;
+    if (!target) return;
+
+    this.textEditor.start(target);
   }
 
   /**
@@ -192,12 +209,18 @@ export class Overlay {
     const elementInfo = this.elementAnalyzer.analyze(element);
     const existing = this.feedbackManager
       .getAll()
-      .find((f) => f.kind === 'text-edit' && f.element.selector === elementInfo.selector);
+      .find(
+        (f) =>
+          f.kind === 'text-edit' &&
+          f.element.selector === elementInfo.selector &&
+          f.textEdit?.textNodeIndex === edit.textNodeIndex
+      );
 
     if (existing && existing.textEdit) {
       const merged: TextEditInfo = {
         originalText: existing.textEdit.originalText,
         newText: edit.newText,
+        textNodeIndex: existing.textEdit.textNodeIndex,
       };
 
       // Editing back to the original copy removes the item entirely.

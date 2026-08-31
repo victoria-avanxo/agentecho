@@ -1,5 +1,20 @@
 import type { FeedbackItem, TextEditInfo } from '../../shared/types';
 
+const FORBIDDEN_TAGS = [
+  'input', 'textarea', 'select', 'option', 'script', 'style',
+  'svg', 'img', 'video', 'canvas', 'iframe',
+];
+
+/**
+ * What a click resolved to. `textNode` is null when the element holds nothing
+ * but text and can be edited whole.
+ */
+export interface EditTarget {
+  element: HTMLElement;
+  textNode: Text | null;
+  textNodeIndex: number;
+}
+
 export interface TextEditorCallbacks {
   /** Fired when the user commits a change that actually differs from the original. */
   onCommit: (element: HTMLElement, edit: TextEditInfo) => void;
@@ -11,6 +26,14 @@ const TEXT_EDITOR_STYLES = `
   .agentecho-text-editable {
     outline: 2px dashed #f59e0b !important;
     outline-offset: 2px !important;
+    cursor: text !important;
+  }
+
+  /* Temporary wrapper around a single text run. Must not affect layout. */
+  .agentecho-text-slot {
+    all: unset !important;
+    outline: 2px dashed #f59e0b !important;
+    outline-offset: 1px !important;
     cursor: text !important;
   }
 
@@ -34,6 +57,9 @@ export class TextEditor {
   private originalText = '';
   /** Exact textContent before editing, used to restore the DOM on cancel. */
   private originalRawText = '';
+  /** Set when editing a single text run inside an element with inline markup. */
+  private slot: HTMLElement | null = null;
+  private slotIndex = -1;
   private previousContentEditable: string | null = null;
   private previousSpellcheck: string | null = null;
 
@@ -56,6 +82,81 @@ export class TextEditor {
 
   get isEditing(): boolean {
     return this.activeElement !== null;
+  }
+
+  /**
+   * The run of text a click resolves to: either a single text node inside an
+   * element that also holds inline markup, or the element itself when its
+   * content is nothing but text.
+   */
+  static resolveTarget(element: HTMLElement, x: number, y: number): EditTarget | null {
+    if (!TextEditor.isEditableHost(element)) return null;
+
+    // Pure-text element: edit it whole, as before.
+    if (element.children.length === 0) {
+      const text = element.textContent?.trim();
+      if (!text) return null;
+      return { element, textNode: null, textNodeIndex: -1 };
+    }
+
+    // Mixed content (a paragraph with links, a list item with <i>, ...).
+    // Edit only the text run under the cursor so markup survives untouched.
+    const node = TextEditor.textNodeAtPoint(x, y);
+    if (!node) return null;
+
+    const parent = node.parentElement;
+    if (!parent || !TextEditor.isEditableHost(parent)) return null;
+    if (!(node.nodeValue ?? '').trim()) return null;
+
+    const index = TextEditor.textNodes(parent).indexOf(node);
+    if (index === -1) return null;
+
+    return { element: parent, textNode: node, textNodeIndex: index };
+  }
+
+  /** Non-empty text node children of an element, in document order. */
+  private static textNodes(parent: Element): Text[] {
+    // Merge adjacent text nodes first so indices are reproducible after a
+    // reload, when the same markup may be parsed into a single node.
+    parent.normalize();
+    return Array.from(parent.childNodes).filter(
+      (n): n is Text => n.nodeType === Node.TEXT_NODE && !!(n.nodeValue ?? '').trim()
+    );
+  }
+
+  private static textNodeAtPoint(x: number, y: number): Text | null {
+    const doc = document as Document & {
+      caretRangeFromPoint?: (x: number, y: number) => Range | null;
+      caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node } | null;
+    };
+
+    const range = doc.caretRangeFromPoint?.(x, y);
+    if (range && range.startContainer.nodeType === Node.TEXT_NODE) {
+      return range.startContainer as Text;
+    }
+
+    // Firefox-style API, kept as a fallback.
+    const pos = doc.caretPositionFromPoint?.(x, y);
+    if (pos && pos.offsetNode.nodeType === Node.TEXT_NODE) {
+      return pos.offsetNode as Text;
+    }
+
+    return null;
+  }
+
+  /** Rect of the text run, so the hover box outlines the text and not the block. */
+  static targetRect(target: EditTarget): DOMRect {
+    if (!target.textNode) return target.element.getBoundingClientRect();
+    const range = document.createRange();
+    range.selectNodeContents(target.textNode);
+    return range.getBoundingClientRect();
+  }
+
+  /** Tags that must never become an editing host. */
+  private static isEditableHost(element: HTMLElement): boolean {
+    if (element.isContentEditable) return false;
+    const tag = element.tagName.toLowerCase();
+    return !FORBIDDEN_TAGS.includes(tag);
   }
 
   /**
@@ -82,29 +183,26 @@ export class TextEditor {
     return raw.replace(/\s+/g, ' ').trim();
   }
 
-  /**
-   * An element is editable only when its content is purely text. Elements that
-   * contain child elements are rejected: editing them risks destroying markup,
-   * which is exactly what this feature must not do.
-   */
-  static isEditableTextElement(element: HTMLElement): boolean {
-    if (element.isContentEditable) return false;
-
-    const tag = element.tagName.toLowerCase();
-    const forbidden = ['input', 'textarea', 'select', 'option', 'script', 'style', 'svg', 'img', 'video', 'canvas', 'iframe'];
-    if (forbidden.includes(tag)) return false;
-
-    // Must have exactly the text it renders and no element children.
-    if (element.children.length > 0) return false;
-
-    const text = element.textContent?.trim();
-    return !!text && text.length > 0;
+  /** True when some run of text under the cursor can be edited. */
+  static canEditAt(element: HTMLElement, x: number, y: number): boolean {
+    return TextEditor.resolveTarget(element, x, y) !== null;
   }
 
-  start(element: HTMLElement): boolean {
+  start(target: EditTarget): boolean {
     if (this.activeElement) this.commit();
-    if (!TextEditor.isEditableTextElement(element)) return false;
 
+    return target.textNode
+      ? this.startTextNodeEdit(target)
+      : this.startElementEdit(target.element);
+  }
+
+  /** Whole-element editing: the element contains nothing but text. */
+  private startElementEdit(element: HTMLElement): boolean {
+    if (element.children.length > 0) return false;
+    if (!(element.textContent ?? '').trim()) return false;
+
+    this.slot = null;
+    this.slotIndex = -1;
     this.activeElement = element;
     this.originalRawText = element.textContent ?? '';
     this.originalText = TextEditor.visibleText(element);
@@ -115,25 +213,72 @@ export class TextEditor {
       element.textContent = this.originalText;
     }
 
-    this.previousContentEditable = element.getAttribute('contenteditable');
-    this.previousSpellcheck = element.getAttribute('spellcheck');
+    this.makeEditable(element, 'agentecho-text-editable');
+    return true;
+  }
+
+  /**
+   * Edit one text run inside an element that also holds inline markup, by
+   * wrapping just that run in a temporary span. Links, <i>, <span> and every
+   * other sibling node are left completely untouched.
+   */
+  private startTextNodeEdit(target: EditTarget): boolean {
+    const node = target.textNode!;
+    const parent = node.parentNode;
+    if (!parent) return false;
+
+    const raw = node.nodeValue ?? '';
+    const collapse = !TextEditor.preservesWhitespace(target.element);
+
+    // Keep the surrounding spacing so neighbouring markup does not run into
+    // the edited words when the run is put back.
+    const leading = collapse && /^\s/.test(raw) ? ' ' : '';
+    const trailing = collapse && /\s$/.test(raw) ? ' ' : '';
+    const visible = collapse ? raw.replace(/\s+/g, ' ').trim() : raw;
+    if (!visible.trim()) return false;
+
+    const slot = document.createElement('span');
+    slot.className = 'agentecho-text-slot';
+    slot.textContent = visible;
+    parent.replaceChild(slot, node);
+
+    this.slot = slot;
+    this.slotIndex = target.textNodeIndex;
+    this.activeElement = target.element;
+    this.originalText = visible;
+    // Reconstructed on cancel/no-op so the DOM returns to its exact shape.
+    this.originalRawText = leading + visible + trailing;
+
+    this.makeEditable(slot, 'agentecho-text-slot');
+    return true;
+  }
+
+  private makeEditable(host: HTMLElement, keepClass: string) {
+    this.previousContentEditable = host.getAttribute('contenteditable');
+    this.previousSpellcheck = host.getAttribute('spellcheck');
 
     // plaintext-only stops the browser from inserting markup or inline styles
     // when the user pastes. Chrome supports it; fall back to true if not.
-    element.setAttribute('contenteditable', 'plaintext-only');
-    if (!element.isContentEditable) {
-      element.setAttribute('contenteditable', 'true');
+    host.setAttribute('contenteditable', 'plaintext-only');
+    if (!host.isContentEditable) {
+      host.setAttribute('contenteditable', 'true');
     }
-    element.setAttribute('spellcheck', 'false');
-    element.classList.add('agentecho-text-editable');
+    host.setAttribute('spellcheck', 'false');
+    if (keepClass === 'agentecho-text-editable') {
+      host.classList.add('agentecho-text-editable');
+    }
 
-    element.addEventListener('keydown', this.handleKeyDown, true);
-    element.addEventListener('blur', this.handleBlur, true);
-    element.addEventListener('paste', this.handlePaste, true);
+    host.addEventListener('keydown', this.handleKeyDown, true);
+    host.addEventListener('blur', this.handleBlur, true);
+    host.addEventListener('paste', this.handlePaste, true);
 
-    element.focus();
-    this.selectAll(element);
-    return true;
+    host.focus();
+    this.selectAll(host);
+  }
+
+  /** The element the browser is actually editing. */
+  private get host(): HTMLElement | null {
+    return this.slot ?? this.activeElement;
   }
 
   private selectAll(element: HTMLElement) {
@@ -179,65 +324,100 @@ export class TextEditor {
   /** Commit the current edit, emitting a change only when the text differs. */
   commit() {
     const element = this.activeElement;
-    if (!element) return;
+    const host = this.host;
+    if (!element || !host) return;
 
     // Read before teardown, then normalise the same way, so a stray newline
     // typed or pasted into the element cannot alter the page's layout.
     const preserve = TextEditor.preservesWhitespace(element);
-    const raw = element.textContent ?? '';
+    const raw = host.textContent ?? '';
     const newText = preserve ? raw : raw.replace(/\s+/g, ' ').trim();
 
-    this.teardown(element);
+    const slot = this.slot;
+    const slotIndex = this.slotIndex;
+    const original = this.originalText;
+    const originalRaw = this.originalRawText;
+    const unchanged = newText.trim() === original.trim();
 
-    // Normalise through textContent so nothing but text survives.
-    element.textContent = newText;
+    this.teardown(host);
 
-    if (newText.trim() === this.originalText.trim()) {
-      // Nothing changed - put the original source formatting back so the DOM
-      // is left exactly as we found it.
-      element.textContent = this.originalRawText;
+    if (slot) {
+      // Put a plain text node back where the wrapper was: the DOM returns to
+      // its original shape, with no leftover element from the editor.
+      const restored = unchanged ? originalRaw : this.padLike(originalRaw, newText);
+      slot.replaceWith(document.createTextNode(restored));
+      element.normalize();
+
+      if (!unchanged) {
+        element.classList.add('agentecho-text-edited');
+        this.callbacks.onCommit(element, {
+          originalText: original,
+          newText,
+          textNodeIndex: slotIndex,
+        });
+      }
     } else {
-      element.classList.add('agentecho-text-edited');
-      this.callbacks.onCommit(element, {
-        originalText: this.originalText,
-        newText,
-      });
+      // Normalise through textContent so nothing but text survives.
+      element.textContent = unchanged ? originalRaw : newText;
+
+      if (!unchanged) {
+        element.classList.add('agentecho-text-edited');
+        this.callbacks.onCommit(element, { originalText: original, newText });
+      }
     }
 
     this.callbacks.onSessionEnd();
+  }
+
+  /** Re-attach the leading/trailing spacing the original run carried. */
+  private padLike(originalRaw: string, newText: string): string {
+    const leading = /^\s/.test(originalRaw) ? ' ' : '';
+    const trailing = /\s$/.test(originalRaw) ? ' ' : '';
+    return leading + newText.trim() + trailing;
   }
 
   /** Abandon the edit and restore the text the element had before. */
   cancel() {
     const element = this.activeElement;
-    if (!element) return;
+    const host = this.host;
+    if (!element || !host) return;
 
-    this.teardown(element);
-    // Restore the exact original text, including its source formatting.
-    element.textContent = this.originalRawText;
+    const slot = this.slot;
+    const originalRaw = this.originalRawText;
+    this.teardown(host);
+
+    if (slot) {
+      slot.replaceWith(document.createTextNode(originalRaw));
+      element.normalize();
+    } else {
+      // Restore the exact original text, including its source formatting.
+      element.textContent = originalRaw;
+    }
     this.callbacks.onSessionEnd();
   }
 
-  private teardown(element: HTMLElement) {
-    element.removeEventListener('keydown', this.handleKeyDown, true);
-    element.removeEventListener('blur', this.handleBlur, true);
-    element.removeEventListener('paste', this.handlePaste, true);
-    element.classList.remove('agentecho-text-editable');
+  private teardown(host: HTMLElement) {
+    host.removeEventListener('keydown', this.handleKeyDown, true);
+    host.removeEventListener('blur', this.handleBlur, true);
+    host.removeEventListener('paste', this.handlePaste, true);
+    host.classList.remove('agentecho-text-editable');
 
     if (this.previousContentEditable === null) {
-      element.removeAttribute('contenteditable');
+      host.removeAttribute('contenteditable');
     } else {
-      element.setAttribute('contenteditable', this.previousContentEditable);
+      host.setAttribute('contenteditable', this.previousContentEditable);
     }
 
     if (this.previousSpellcheck === null) {
-      element.removeAttribute('spellcheck');
+      host.removeAttribute('spellcheck');
     } else {
-      element.setAttribute('spellcheck', this.previousSpellcheck);
+      host.setAttribute('spellcheck', this.previousSpellcheck);
     }
 
     window.getSelection()?.removeAllRanges();
     this.activeElement = null;
+    this.slot = null;
+    this.slotIndex = -1;
     this.previousContentEditable = null;
     this.previousSpellcheck = null;
   }
@@ -250,23 +430,15 @@ export class TextEditor {
     for (const item of items) {
       if (item.kind !== 'text-edit' || !item.textEdit) continue;
 
-      let element: HTMLElement | null = null;
-      try {
-        element = document.querySelector(item.element.selector) as HTMLElement | null;
-      } catch {
-        continue; // Selector no longer valid for this page.
-      }
-      if (!element || element.children.length > 0) continue;
+      const element = TextEditor.findElement(item.element.selector);
+      if (!element) continue;
 
-      // Compare collapsed text: the stored original is normalised, but the
-      // page's markup still carries its source indentation.
-      const current = TextEditor.visibleText(element);
-      // Only re-apply when the element still holds the original copy, so we
-      // never clobber text the page itself has since changed.
-      if (current === item.textEdit.originalText.trim()) {
-        element.textContent = item.textEdit.newText;
-        element.classList.add('agentecho-text-edited');
-      }
+      TextEditor.swapText(
+        element,
+        item.textEdit.textNodeIndex,
+        item.textEdit.originalText,
+        item.textEdit.newText
+      );
     }
   }
 
@@ -274,17 +446,60 @@ export class TextEditor {
   static revertEdit(item: FeedbackItem): void {
     if (item.kind !== 'text-edit' || !item.textEdit) return;
 
-    let element: HTMLElement | null = null;
-    try {
-      element = document.querySelector(item.element.selector) as HTMLElement | null;
-    } catch {
-      return;
-    }
-    if (!element || element.children.length > 0) return;
+    const element = TextEditor.findElement(item.element.selector);
+    if (!element) return;
 
-    if (TextEditor.visibleText(element) === item.textEdit.newText.trim()) {
-      element.textContent = item.textEdit.originalText;
-    }
+    TextEditor.swapText(
+      element,
+      item.textEdit.textNodeIndex,
+      item.textEdit.newText,
+      item.textEdit.originalText
+    );
     element.classList.remove('agentecho-text-edited');
+  }
+
+  private static findElement(selector: string): HTMLElement | null {
+    try {
+      return document.querySelector(selector) as HTMLElement | null;
+    } catch {
+      return null; // Selector no longer valid for this page.
+    }
+  }
+
+  /**
+   * Replace `from` with `to`, either across the whole element or in one text
+   * run. The swap only happens when the target still holds `from`, so text the
+   * page has changed since is never clobbered.
+   */
+  private static swapText(
+    element: HTMLElement,
+    textNodeIndex: number | undefined,
+    from: string,
+    to: string
+  ): boolean {
+    const collapse = !TextEditor.preservesWhitespace(element);
+    const norm = (v: string) => (collapse ? v.replace(/\s+/g, ' ').trim() : v);
+
+    // Whole-element edit (also the shape saved before inline markup support).
+    if (textNodeIndex === undefined || textNodeIndex < 0) {
+      if (element.children.length > 0) return false;
+      if (norm(element.textContent ?? '') !== norm(from)) return false;
+      element.textContent = to;
+      if (to !== from) element.classList.add('agentecho-text-edited');
+      return true;
+    }
+
+    const nodes = TextEditor.textNodes(element);
+    const node = nodes[textNodeIndex];
+    if (!node) return false;
+
+    const raw = node.nodeValue ?? '';
+    if (norm(raw) !== norm(from)) return false;
+
+    const leading = collapse && /^\s/.test(raw) ? ' ' : '';
+    const trailing = collapse && /\s$/.test(raw) ? ' ' : '';
+    node.nodeValue = leading + to.trim() + trailing;
+    if (to !== from) element.classList.add('agentecho-text-edited');
+    return true;
   }
 }
