@@ -357,6 +357,7 @@ export class Overlay {
     this.toolbar.onPauseToggle = () => this.togglePause();
     this.toolbar.onMarkersToggle = () => this.toggleMarkers();
     this.toolbar.onCopy = () => this.copyFeedback();
+    this.toolbar.onDownload = () => this.downloadFeedback();
     this.toolbar.onClear = () => this.clearAll();
     this.toolbar.onExit = () => this.deactivate();
     this.toolbar.onModeToggle = (mode) => this.setMode(mode);
@@ -431,6 +432,65 @@ export class Overlay {
     if (this.settings.clearAfterCopy) {
       this.clearAll();
     }
+  }
+
+  /**
+   * Save the report as a .txt file. Uses an object URL rather than the
+   * downloads API so no extra extension permission is needed.
+   */
+  downloadFeedback(): boolean {
+    const items = this.feedbackManager.getAll();
+    if (items.length === 0) {
+      return false;
+    }
+
+    const markdown = this.feedbackManager.toMarkdown(this.settings);
+    const blob = new Blob([markdown], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = this.buildFileName();
+    link.style.display = 'none';
+
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+
+    // Give the browser a moment to start the download before revoking.
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+
+    this.toolbar.showDownloadSuccess();
+
+    if (this.settings.clearAfterCopy) {
+      this.clearAll();
+    }
+    return true;
+  }
+
+  /** agentecho-<host>-<path>-<timestamp>.txt, kept filesystem-safe. */
+  private buildFileName(): string {
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const stamp =
+      `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}` +
+      `-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+
+    let slug = 'page';
+    try {
+      const { hostname, pathname } = new URL(window.location.href);
+      slug = `${hostname}${pathname}`;
+    } catch {
+      // Fall back to the generic slug.
+    }
+
+    slug = slug
+      .replace(/[^a-zA-Z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .toLowerCase()
+      .substring(0, 60);
+
+    return `agentecho-${slug || 'page'}-${stamp}.txt`;
   }
 
   clearAll() {

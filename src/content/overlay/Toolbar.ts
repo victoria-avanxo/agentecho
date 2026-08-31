@@ -75,6 +75,7 @@ const ICONS = {
   eye: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`,
   eyeOff: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`,
   copy: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`,
+  download: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`,
   check: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>`,
   text: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>`,
   trash: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>`,
@@ -92,6 +93,7 @@ export class Toolbar {
   onMarkersToggle?: () => void;
   onModeToggle?: (mode: OverlayMode) => void;
   onCopy?: () => void;
+  onDownload?: () => void;
   onClear?: () => void;
   onExit?: () => void;
 
@@ -187,6 +189,9 @@ export class Toolbar {
     const copyBtn = this.createButton('copy', 'Copy to clipboard');
     copyBtn.onclick = () => this.onCopy?.();
 
+    const downloadBtn = this.createButton('download', 'Download as .txt (D)');
+    downloadBtn.onclick = () => this.onDownload?.();
+
     const clearBtn = this.createButton('trash', 'Clear all');
     clearBtn.onclick = () => this.onClear?.();
 
@@ -201,6 +206,7 @@ export class Toolbar {
     toolbar.appendChild(textBtn);
     toolbar.appendChild(divider1);
     toolbar.appendChild(copyBtn);
+    toolbar.appendChild(downloadBtn);
     toolbar.appendChild(clearBtn);
     toolbar.appendChild(divider2);
     // toolbar.appendChild(exitBtn);
@@ -256,15 +262,26 @@ export class Toolbar {
   }
 
   showCopySuccess() {
-    const copyBtn = this.element.querySelector('.agentecho-toolbar-btn:nth-child(5)') as HTMLButtonElement;
-    if (copyBtn) {
-      const originalIcon = copyBtn.innerHTML;
-      copyBtn.innerHTML = ICONS.check;
-      copyBtn.style.background = '#22c55e';
-      setTimeout(() => {
-        copyBtn.innerHTML = originalIcon;
-        copyBtn.style.background = '';
-      }, 1500);
-    }
+    this.flashSuccess(5);
+  }
+
+  showDownloadSuccess() {
+    this.flashSuccess(6);
+  }
+
+  /** Briefly swap a toolbar button's icon for a checkmark. */
+  private flashSuccess(childIndex: number) {
+    const btn = this.element.querySelector(
+      `.agentecho-toolbar-btn:nth-child(${childIndex})`
+    ) as HTMLButtonElement | null;
+    if (!btn) return;
+
+    const originalIcon = btn.innerHTML;
+    btn.innerHTML = ICONS.check;
+    btn.style.background = '#22c55e';
+    setTimeout(() => {
+      btn.innerHTML = originalIcon;
+      btn.style.background = '';
+    }, 1500);
   }
 }

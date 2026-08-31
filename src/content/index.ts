@@ -110,6 +110,9 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       overlay?.clearAllMarkers();
       sendResponse({ success: true });
       break;
+    case 'DOWNLOAD_FEEDBACK':
+      sendResponse({ success: overlay?.downloadFeedback() ?? false });
+      break;
     case 'COPY_FEEDBACK':
       const markdown = feedbackManager?.toMarkdown();
       if (markdown) {
@@ -181,6 +184,11 @@ document.addEventListener('keydown', (e) => {
       navigator.clipboard.writeText(markdown);
       alert('Feedback copied to clipboard!');
     }
+  }
+
+  if (e.key.toLowerCase() === 'd') {
+    e.preventDefault();
+    overlay?.downloadFeedback();
   }
 
   if (e.key.toLowerCase() === 'h') {
