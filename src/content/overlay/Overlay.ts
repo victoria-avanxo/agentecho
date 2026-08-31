@@ -3,7 +3,8 @@ import { MarkerManager } from './MarkerManager';
 import { Toolbar } from './Toolbar';
 import { FeedbackModal } from './FeedbackModal';
 import { ElementAnalyzer } from '../analyzers/ElementAnalyzer';
-import type { ExtensionSettings, FeedbackItem } from '../../shared/types';
+import { TextEditor } from './TextEditor';
+import type { ExtensionSettings, FeedbackItem, OverlayMode, TextEditInfo } from '../../shared/types';
 import type { FeedbackManager } from '../feedback/FeedbackManager';
 import { sendMessage } from '../../shared/messaging';
 
@@ -43,6 +44,7 @@ export class Overlay {
   private markerManager: MarkerManager;
   private toolbar: Toolbar;
   private feedbackModal: FeedbackModal;
+  private textEditor: TextEditor;
   private elementAnalyzer: ElementAnalyzer;
   private feedbackManager: FeedbackManager;
   private settings: ExtensionSettings;
@@ -51,6 +53,7 @@ export class Overlay {
   private markersVisible = true;
   private targetElement: HTMLElement | null = null;
   private isModalOpen = false;
+  private mode: OverlayMode = 'comment';
 
   constructor(settings: ExtensionSettings, feedbackManager: FeedbackManager) {
     this.settings = settings;
@@ -71,10 +74,15 @@ export class Overlay {
     });
     this.toolbar = new Toolbar(this.shadowRoot, settings);
     this.feedbackModal = new FeedbackModal(this.shadowRoot);
+    this.textEditor = new TextEditor({
+      onCommit: (element, edit) => this.handleTextEditCommit(element, edit),
+      onSessionEnd: () => this.handleTextEditSessionEnd(),
+    });
     this.elementAnalyzer = new ElementAnalyzer();
 
     this.setupEventListeners();
     this.setupToolbarListeners();
+    this.applySavedTextEdits();
     this.loadExistingMarkers();
 
     // Apply block interactions setting
@@ -95,6 +103,7 @@ export class Overlay {
 
   private handleMouseMove = (e: MouseEvent) => {
     if (!this.isActive || this.isPaused || this.isModalOpen) return;
+    if (this.textEditor.isEditing) return;
 
     const target = document.elementFromPoint(e.clientX, e.clientY);
     if (!target || target === this.container || target === this.blockOverlay) {
@@ -109,6 +118,12 @@ export class Overlay {
     }
 
     if (target instanceof HTMLElement) {
+      // In text mode only elements whose content is pure text can be picked.
+      if (this.mode === 'text' && !TextEditor.isEditableTextElement(target)) {
+        this.hoverBox.hide();
+        this.targetElement = null;
+        return;
+      }
       this.hoverBox.show(target);
       this.targetElement = target;
     }
@@ -125,6 +140,10 @@ export class Overlay {
 
     const target = e.target as HTMLElement;
 
+    // A click while editing lands on the element being edited: let it through
+    // so the caret moves, and let blur commit when focus leaves.
+    if (this.textEditor.isEditing) return;
+
     // Check if click is inside our shadow DOM (toolbar, markers, etc.)
     // When clicking an element inside Shadow DOM, the event target is retargeted to the host (this.container)
     if (this.shadowRoot.contains(target) || target === this.container) {
@@ -136,7 +155,12 @@ export class Overlay {
     if (this.targetElement) {
       e.preventDefault();
       e.stopPropagation();
-      this.promptForFeedback(this.targetElement);
+
+      if (this.mode === 'text') {
+        this.startTextEdit(this.targetElement);
+      } else {
+        this.promptForFeedback(this.targetElement);
+      }
       return;
     }
 
@@ -150,6 +174,101 @@ export class Overlay {
     // Default behavior for non-target clicks when blocking is disabled
     // (do nothing, let event propagate)
   };
+
+  private startTextEdit(element: HTMLElement) {
+    this.hoverBox.hide();
+    if (!this.textEditor.start(element)) {
+      // Not a pure-text element; nothing to edit.
+      return;
+    }
+  }
+
+  /**
+   * A committed inline edit becomes a feedback item of kind 'text-edit'. If the
+   * same element was already edited, the existing item is updated so the
+   * original copy is never lost behind a chain of edits.
+   */
+  private handleTextEditCommit(element: HTMLElement, edit: TextEditInfo) {
+    const elementInfo = this.elementAnalyzer.analyze(element);
+    const existing = this.feedbackManager
+      .getAll()
+      .find((f) => f.kind === 'text-edit' && f.element.selector === elementInfo.selector);
+
+    if (existing && existing.textEdit) {
+      const merged: TextEditInfo = {
+        originalText: existing.textEdit.originalText,
+        newText: edit.newText,
+      };
+
+      // Editing back to the original copy removes the item entirely.
+      if (merged.newText.trim() === merged.originalText.trim()) {
+        this.handleDeleteFeedback(existing.id);
+        element.classList.remove('agentecho-text-edited');
+        return;
+      }
+
+      this.feedbackManager.update(existing.id, {
+        textEdit: merged,
+        comment: this.describeTextEdit(merged),
+        element: elementInfo,
+        timestamp: Date.now(),
+      });
+      this.refreshMarkers();
+      return;
+    }
+
+    const feedback: FeedbackItem = {
+      id: crypto.randomUUID(),
+      index: this.feedbackManager.getAll().length + 1,
+      kind: 'text-edit',
+      comment: this.describeTextEdit(edit),
+      textEdit: edit,
+      timestamp: Date.now(),
+      url: window.location.href,
+      element: elementInfo,
+    };
+
+    this.feedbackManager.add(feedback);
+    this.markerManager.addMarker(feedback);
+  }
+
+  private describeTextEdit(edit: TextEditInfo): string {
+    return `Change text from "${edit.originalText.trim()}" to "${edit.newText.trim()}"`;
+  }
+
+  private handleTextEditSessionEnd() {
+    // Marker geometry may have shifted if the new copy changed the layout.
+    requestAnimationFrame(() => {
+      this.markerManager.updatePositions(this.feedbackManager.getAll());
+    });
+  }
+
+  /** Re-apply every saved text edit to the current DOM. */
+  public applySavedTextEdits() {
+    TextEditor.applySavedEdits(this.feedbackManager.getAll());
+  }
+
+  public setMode(mode: OverlayMode) {
+    if (this.textEditor.isEditing) {
+      this.textEditor.commit();
+    }
+    this.mode = mode;
+    this.toolbar.setMode(mode);
+    this.hoverBox.hide();
+    this.targetElement = null;
+  }
+
+  public toggleMode() {
+    this.setMode(this.mode === 'text' ? 'comment' : 'text');
+  }
+
+  public get currentMode(): OverlayMode {
+    return this.mode;
+  }
+
+  public get isEditingText(): boolean {
+    return this.textEditor.isEditing;
+  }
 
   private async promptForFeedback(element: HTMLElement) {
     this.isModalOpen = true;
@@ -177,6 +296,14 @@ export class Overlay {
   private async handleEditFeedback(id: string) {
     const feedback = this.feedbackManager.getAll().find(f => f.id === id);
     if (!feedback) return;
+
+    // For a text edit the action is "Revert": put the original copy back and
+    // drop the item, rather than opening the comment modal.
+    if (feedback.kind === 'text-edit') {
+      TextEditor.revertEdit(feedback);
+      this.handleDeleteFeedback(id);
+      return;
+    }
 
     // Find the element again using the selector
     const element = document.querySelector(feedback.element.selector) as HTMLElement;
@@ -232,6 +359,7 @@ export class Overlay {
     this.toolbar.onCopy = () => this.copyFeedback();
     this.toolbar.onClear = () => this.clearAll();
     this.toolbar.onExit = () => this.deactivate();
+    this.toolbar.onModeToggle = (mode) => this.setMode(mode);
   }
 
   public loadExistingMarkers() {
@@ -273,6 +401,7 @@ export class Overlay {
   }
 
   deactivate() {
+    this.deactivateTextEditing();
     this.isActive = false;
     this.removeEventListeners();
     window.removeEventListener('resize', this.handleResize);
@@ -305,6 +434,8 @@ export class Overlay {
   }
 
   clearAll() {
+    // Put the page's original copy back before dropping the records.
+    this.feedbackManager.getAll().forEach((item) => TextEditor.revertEdit(item));
     this.feedbackManager.clearAll();
     this.markerManager.clearAll();
   }
@@ -339,5 +470,11 @@ export class Overlay {
 
   updateFeedbackManager(feedbackManager: FeedbackManager) {
     this.feedbackManager = feedbackManager;
+  }
+
+  deactivateTextEditing() {
+    if (this.textEditor.isEditing) {
+      this.textEditor.commit();
+    }
   }
 }

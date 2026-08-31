@@ -1,4 +1,4 @@
-import type { ExtensionSettings } from '../../shared/types';
+import type { ExtensionSettings, OverlayMode } from '../../shared/types';
 
 const TOOLBAR_STYLES = `
   .agentecho-toolbar {
@@ -50,6 +50,10 @@ const TOOLBAR_STYLES = `
     background: #3b82f6;
   }
 
+  .agentecho-toolbar-btn.text-mode.active {
+    background: #f59e0b;
+  }
+
   .agentecho-toolbar-label {
     color: #f9fafb;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -72,6 +76,7 @@ const ICONS = {
   eyeOff: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`,
   copy: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`,
   check: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>`,
+  text: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>`,
   trash: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>`,
   // exit: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>`,
 };
@@ -80,9 +85,12 @@ export class Toolbar {
   private element: HTMLElement;
   private isPaused = false;
   private markersVisible = true;
+  private mode: OverlayMode = 'comment';
+  private textBtn!: HTMLButtonElement;
 
   onPauseToggle?: () => void;
   onMarkersToggle?: () => void;
+  onModeToggle?: (mode: OverlayMode) => void;
   onCopy?: () => void;
   onClear?: () => void;
   onExit?: () => void;
@@ -165,6 +173,14 @@ export class Toolbar {
       this.onMarkersToggle?.();
     };
 
+    const textBtn = this.createButton('text', 'Inline text edit mode (T)');
+    textBtn.classList.add('text-mode');
+    textBtn.onclick = () => {
+      this.setMode(this.mode === 'text' ? 'comment' : 'text');
+      this.onModeToggle?.(this.mode);
+    };
+    this.textBtn = textBtn;
+
     const divider1 = document.createElement('div');
     divider1.className = 'agentecho-toolbar-divider';
 
@@ -182,6 +198,7 @@ export class Toolbar {
 
     toolbar.appendChild(pauseBtn);
     toolbar.appendChild(eyeBtn);
+    toolbar.appendChild(textBtn);
     toolbar.appendChild(divider1);
     toolbar.appendChild(copyBtn);
     toolbar.appendChild(clearBtn);
@@ -221,6 +238,15 @@ export class Toolbar {
     }
   }
 
+  setMode(mode: OverlayMode) {
+    this.mode = mode;
+    if (mode === 'text') {
+      this.textBtn.classList.add('active');
+    } else {
+      this.textBtn.classList.remove('active');
+    }
+  }
+
   private togglePause() {
     this.setPaused(!this.isPaused);
   }
@@ -230,7 +256,7 @@ export class Toolbar {
   }
 
   showCopySuccess() {
-    const copyBtn = this.element.querySelector('.agentecho-toolbar-btn:nth-child(4)') as HTMLButtonElement;
+    const copyBtn = this.element.querySelector('.agentecho-toolbar-btn:nth-child(5)') as HTMLButtonElement;
     if (copyBtn) {
       const originalIcon = copyBtn.innerHTML;
       copyBtn.innerHTML = ICONS.check;

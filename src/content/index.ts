@@ -50,7 +50,8 @@ async function handleUrlChange() {
     // Update overlay with new feedback manager
     overlay.updateFeedbackManager(feedbackManager);
 
-    // Load existing markers for new URL
+    // Re-apply saved copy changes, then load markers for the new URL
+    overlay.applySavedTextEdits();
     overlay.loadExistingMarkers();
   }
 }
@@ -100,6 +101,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     case 'TOGGLE_PAUSE':
       overlay?.togglePause();
       break;
+    case 'SET_MODE':
+      overlay?.setMode(message.mode);
+      sendResponse({ success: true });
+      break;
     case 'CLEAR_FEEDBACK':
       feedbackManager?.clearAll();
       overlay?.clearAllMarkers();
@@ -133,10 +138,25 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   return false;
 });
 
+function isTypingContext(): boolean {
+  const el = document.activeElement as HTMLElement | null;
+  if (!el) return false;
+  return (
+    el.isContentEditable ||
+    el.tagName === 'INPUT' ||
+    el.tagName === 'TEXTAREA' ||
+    el.tagName === 'SELECT'
+  );
+}
+
 document.addEventListener('keydown', (e) => {
   if (!overlay?.isActive) return;
 
-  if (e.key === 'Escape') {
+  // While the user is typing - including an inline text edit - single-key
+  // shortcuts would otherwise clear feedback or copy mid-word.
+  const typing = isTypingContext() || overlay.isEditingText;
+
+  if (e.key === 'Escape' && !typing) {
     deactivateOverlay();
   }
 
@@ -145,6 +165,13 @@ document.addEventListener('keydown', (e) => {
       e.preventDefault();
       deactivateOverlay();
     }
+  }
+
+  if (typing) return;
+
+  if (e.key.toLowerCase() === 't') {
+    e.preventDefault();
+    overlay?.toggleMode();
   }
 
   if (e.key.toLowerCase() === 'c' && !e.ctrlKey && !e.metaKey) {
@@ -162,11 +189,8 @@ document.addEventListener('keydown', (e) => {
   }
 
   if (e.key === 'Delete' || e.key === 'Backspace') {
-    if (document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'TEXTAREA') {
-      e.preventDefault();
-      feedbackManager?.clearAll();
-      overlay?.clearAllMarkers();
-    }
+    e.preventDefault();
+    overlay?.clearAll();
   }
 });
 

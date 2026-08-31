@@ -5,6 +5,8 @@ export interface MarkerCallbacks {
   onDelete: (id: string) => void;
 }
 
+const TEXT_EDIT_COLOR = '#f59e0b';
+
 const MARKER_STYLES = (color: string) => `
   .agentecho-markers-container {
     position: absolute;
@@ -42,6 +44,40 @@ const MARKER_STYLES = (color: string) => `
   .agentecho-marker.hidden {
     opacity: 0;
     pointer-events: none;
+  }
+
+  .agentecho-marker.text-edit {
+    background-color: ${TEXT_EDIT_COLOR};
+    border-radius: 6px;
+  }
+
+  .agentecho-marker-diff {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12px;
+    line-height: 1.5;
+    margin-bottom: 10px;
+    word-wrap: break-word;
+    white-space: pre-wrap;
+  }
+
+  .agentecho-marker-diff .old {
+    color: #fca5a5;
+    text-decoration: line-through;
+    display: block;
+  }
+
+  .agentecho-marker-diff .new {
+    color: #86efac;
+    display: block;
+    margin-top: 4px;
+  }
+
+  .agentecho-marker-btn.revert {
+    background: #6b7280;
+  }
+
+  .agentecho-marker-btn.revert:hover {
+    background: #4b5563;
   }
 
   .agentecho-marker-popup {
@@ -160,8 +196,10 @@ export class MarkerManager {
     const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
     const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
 
+    const isTextEdit = feedback.kind === 'text-edit';
+
     const marker = document.createElement('div');
-    marker.className = 'agentecho-marker';
+    marker.className = isTextEdit ? 'agentecho-marker text-edit' : 'agentecho-marker';
     marker.dataset.feedbackId = feedback.id;
     marker.textContent = feedback.index.toString();
     marker.style.top = `${rect.top + scrollTop - 14}px`;
@@ -171,18 +209,30 @@ export class MarkerManager {
     const popup = document.createElement('div');
     popup.className = 'agentecho-marker-popup';
 
-    // Comment text
+    // Comment text - for a text edit, show the before/after copy instead.
     const commentEl = document.createElement('div');
-    commentEl.className = 'agentecho-marker-comment';
-    commentEl.textContent = feedback.comment;
+    if (isTextEdit && feedback.textEdit) {
+      commentEl.className = 'agentecho-marker-diff';
+      const oldEl = document.createElement('span');
+      oldEl.className = 'old';
+      oldEl.textContent = feedback.textEdit.originalText;
+      const newEl = document.createElement('span');
+      newEl.className = 'new';
+      newEl.textContent = feedback.textEdit.newText;
+      commentEl.appendChild(oldEl);
+      commentEl.appendChild(newEl);
+    } else {
+      commentEl.className = 'agentecho-marker-comment';
+      commentEl.textContent = feedback.comment;
+    }
 
     // Actions container
     const actions = document.createElement('div');
     actions.className = 'agentecho-marker-actions';
 
     const editBtn = document.createElement('button');
-    editBtn.className = 'agentecho-marker-btn edit';
-    editBtn.textContent = 'Edit';
+    editBtn.className = isTextEdit ? 'agentecho-marker-btn revert' : 'agentecho-marker-btn edit';
+    editBtn.textContent = isTextEdit ? 'Revert' : 'Edit';
     editBtn.onclick = (e) => {
       e.stopPropagation();
       e.preventDefault();
@@ -214,7 +264,8 @@ export class MarkerManager {
 
   updateMarkerTooltip(id: string, newComment: string) {
     const markerData = this.markers.get(id);
-    if (markerData) {
+    // Text-edit popups render a before/after diff, not a plain comment.
+    if (markerData && markerData.commentEl.className === 'agentecho-marker-comment') {
       markerData.commentEl.textContent = newComment;
     }
   }
