@@ -32,6 +32,8 @@ export class TextEditor {
   private callbacks: TextEditorCallbacks;
   private activeElement: HTMLElement | null = null;
   private originalText = '';
+  /** Exact textContent before editing, used to restore the DOM on cancel. */
+  private originalRawText = '';
   private previousContentEditable: string | null = null;
   private previousSpellcheck: string | null = null;
 
@@ -54,6 +56,30 @@ export class TextEditor {
 
   get isEditing(): boolean {
     return this.activeElement !== null;
+  }
+
+  /**
+   * True when the element's own CSS makes whitespace significant, as in <pre>
+   * or a code block. For those the text must be left byte-for-byte alone.
+   */
+  private static preservesWhitespace(element: HTMLElement): boolean {
+    const ws = getComputedStyle(element).whiteSpace;
+    return ws === 'pre' || ws === 'pre-wrap' || ws === 'pre-line' || ws === 'break-spaces';
+  }
+
+  /**
+   * Collapse source formatting down to the text the user actually sees.
+   *
+   * Markup like `<button>\n  Save\n</button>` has a textContent of
+   * "\n  Save\n". The browser collapses that to "Save" when rendering, but a
+   * contenteditable host renders whitespace literally - so without this the
+   * element gains a blank line above and below the moment editing starts, and
+   * the page visibly jumps. Elements with pre-like white-space are exempt.
+   */
+  private static visibleText(element: HTMLElement): string {
+    const raw = element.textContent ?? '';
+    if (TextEditor.preservesWhitespace(element)) return raw;
+    return raw.replace(/\s+/g, ' ').trim();
   }
 
   /**
@@ -80,7 +106,14 @@ export class TextEditor {
     if (!TextEditor.isEditableTextElement(element)) return false;
 
     this.activeElement = element;
-    this.originalText = element.textContent ?? '';
+    this.originalRawText = element.textContent ?? '';
+    this.originalText = TextEditor.visibleText(element);
+
+    // Write the collapsed text back before the element becomes editable, so
+    // the editing host renders exactly what the user was already seeing.
+    if (this.originalText !== this.originalRawText) {
+      element.textContent = this.originalText;
+    }
 
     this.previousContentEditable = element.getAttribute('contenteditable');
     this.previousSpellcheck = element.getAttribute('spellcheck');
@@ -148,13 +181,22 @@ export class TextEditor {
     const element = this.activeElement;
     if (!element) return;
 
-    const newText = element.textContent ?? '';
+    // Read before teardown, then normalise the same way, so a stray newline
+    // typed or pasted into the element cannot alter the page's layout.
+    const preserve = TextEditor.preservesWhitespace(element);
+    const raw = element.textContent ?? '';
+    const newText = preserve ? raw : raw.replace(/\s+/g, ' ').trim();
+
     this.teardown(element);
 
     // Normalise through textContent so nothing but text survives.
     element.textContent = newText;
 
-    if (newText.trim() !== this.originalText.trim()) {
+    if (newText.trim() === this.originalText.trim()) {
+      // Nothing changed - put the original source formatting back so the DOM
+      // is left exactly as we found it.
+      element.textContent = this.originalRawText;
+    } else {
       element.classList.add('agentecho-text-edited');
       this.callbacks.onCommit(element, {
         originalText: this.originalText,
@@ -171,7 +213,8 @@ export class TextEditor {
     if (!element) return;
 
     this.teardown(element);
-    element.textContent = this.originalText;
+    // Restore the exact original text, including its source formatting.
+    element.textContent = this.originalRawText;
     this.callbacks.onSessionEnd();
   }
 
@@ -215,10 +258,12 @@ export class TextEditor {
       }
       if (!element || element.children.length > 0) continue;
 
-      const current = element.textContent ?? '';
+      // Compare collapsed text: the stored original is normalised, but the
+      // page's markup still carries its source indentation.
+      const current = TextEditor.visibleText(element);
       // Only re-apply when the element still holds the original copy, so we
       // never clobber text the page itself has since changed.
-      if (current.trim() === item.textEdit.originalText.trim()) {
+      if (current === item.textEdit.originalText.trim()) {
         element.textContent = item.textEdit.newText;
         element.classList.add('agentecho-text-edited');
       }
@@ -237,7 +282,7 @@ export class TextEditor {
     }
     if (!element || element.children.length > 0) return;
 
-    if ((element.textContent ?? '').trim() === item.textEdit.newText.trim()) {
+    if (TextEditor.visibleText(element) === item.textEdit.newText.trim()) {
       element.textContent = item.textEdit.originalText;
     }
     element.classList.remove('agentecho-text-edited');
