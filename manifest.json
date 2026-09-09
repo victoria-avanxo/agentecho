@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "AgentEcho",
+  "name": "Avanxo Feedbacks",
   "version": "1.0.0",
   "description": "Visual feedback annotation tool for developers",
   "icons": {

@@ -1,7 +1,7 @@
 {
-  "name": "agentecho",
+  "name": "avanxo-feedbacks",
   "version": "1.0.0",
-  "description": "Visual feedback annotation tool for developers to place markers on DOM elements and generate AI-optimized Markdown",
+  "description": "Visual feedback annotation tool to place markers on DOM elements and generate AI-optimized Markdown for client feedback delivery",
   "type": "module",
   "license": "Polyform-Noncommercial-1.0.0",
   "author": "Areshk",

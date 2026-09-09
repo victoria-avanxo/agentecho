@@ -1,8 +1,8 @@
 <div align="center">
 
-  <img src="assets/logo-text.jpg" alt="AgentEcho Logo" width="400">
+  <img src="assets/logo-text.jpg" alt="Avanxo Feedbacks Logo" width="400">
 
-  **Visual feedback annotation tool for developers**
+  **Visual feedback annotation tool for developers and clients**
 
   [![License: Polyform Noncommercial](https://img.shields.io/badge/License-Polyform_Noncommercial_1.0.0-red.svg)](LICENSE.md)
   [![Chrome Version](https://img.shields.io/badge/Chrome-Manifest%20V3-green.svg)](https://developer.chrome.com/docs/extensions/mv3/intro/)
@@ -20,7 +20,7 @@
 
 <div align="center">
 
-  ![AgentEcho Demo](assets/demo.gif)
+  ![Avanxo Feedbacks Demo](assets/demo.gif)
 
   *Hover to highlight elements, click to add feedback*
 
@@ -69,12 +69,12 @@
 
 ### From Source (Free)
 
-If you're comfortable building from source, you can use AgentEcho completely free:
+If you're comfortable building from source, you can use Avanxo Feedbacks completely free:
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/yourusername/agentecho.git
-   cd agentecho
+   git clone https://github.com/victoria-avanxo/agentecho.git
+   cd avanxo-feedbacks
    ```
 
 2. **Install dependencies**
@@ -99,7 +99,7 @@ If you're comfortable building from source, you can use AgentEcho completely fre
 
 ### Basic Workflow
 
-1. **Click the extension icon** in your browser toolbar to open AgentEcho
+1. **Click the extension icon** in your browser toolbar to open Avanxo Feedbacks
 2. **Click "Activate"** to enable annotation on the current page
 3. **Hover** over any element to see the blue highlight box
 4. **Click** an element to place a marker
@@ -128,7 +128,7 @@ If you're comfortable building from source, you can use AgentEcho completely fre
 ### Example Output
 
 ```markdown
-# AgentEcho Feedback Report
+# Avanxo Feedbacks Report
 
 **URL:** https://example.com/dashboard
 **Captured:** 2026-01-21 20:15:00
@@ -183,7 +183,7 @@ npm run build  # Includes tsc compilation
 ### Project Structure
 
 ```
-agentecho/
+avanxo-feedbacks/
 ├── manifest.json              # Chrome extension manifest
 ├── src/
 │   ├── background/           # Service worker (message broker)
@@ -225,6 +225,15 @@ npm run generate-icons
 
 ---
 
+## Attribution
+
+**Avanxo Feedbacks** is a fork of [AgentEcho](https://github.com/Areshkew/agentecho) by **Areshkew**, modified and rebranded for client feedback delivery. All changes retain the original copyright and are licensed under the same [Polyform Noncommercial 1.0.0](LICENSE.md) terms.
+
+- Original project & copyright: **© 2026 Areshkew. All Rights Reserved.**
+- This fork (name, branding, and modifications): **Avanxo Feedbacks**
+
+---
+
 ## License
 
 **Polyform Noncommercial 1.0.0**
@@ -244,7 +253,7 @@ This project is source-available but not open-source software.
 [Read full license text](LICENSE.md)
 
 > **Why this license?**
-> AgentEcho is free to build and use for developers who want to compile from source. Purchasing from the Chrome Web Store for $2 supports continued development, covers hosting costs, and provides an easy, pre-built installation option. Think of it as a "buy me a coffee" model for convenience.
+> Avanxo Feedbacks is free to build and use. It's distributed as a source-available version of the open-source AgentEcho project by Areshkew, modified for client feedback use. See the attribution note below.
 
 ---
 

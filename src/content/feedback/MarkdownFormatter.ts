@@ -4,7 +4,7 @@ export class MarkdownFormatter {
   format(url: string, feedback: FeedbackItem[], settings?: ExtensionSettings): string {
     const detail = settings?.outputDetail || 'standard';
 
-    let markdown = `# AgentEcho Feedback Report\n`;
+    let markdown = `# Avanxo Feedbacks Report\n`;
     markdown += `**URL:** ${url}\n`;
     markdown += `**Captured:** ${new Date().toISOString().replace('T', ' ').substring(0, 19)}\n`;
     markdown += `**Total Items:** ${feedback.length}\n`;
