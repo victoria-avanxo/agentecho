@@ -62,11 +62,55 @@ toggleBtn?.addEventListener('click', async () => {
   updateToggleButton();
 
   if (isActive) {
-    chrome.tabs.sendMessage(currentTabId, { type: 'ACTIVATE_OVERLAY' });
+    await activateOverlay(currentTabId);
   } else {
-    chrome.tabs.sendMessage(currentTabId, { type: 'DEACTIVATE_OVERLAY' });
+    chrome.tabs.sendMessage(currentTabId, { type: 'DEACTIVATE_OVERLAY' }).catch(() => {});
   }
 });
+
+/**
+ * Send ACTIVATE_OVERLAY to the tab. Content scripts are only auto-injected into
+ * pages loaded after the extension was loaded/reloaded, so a tab that was already
+ * open (or a dev reload) has no content script and the message goes nowhere.
+ * In that case, inject the content script on demand using the loader path declared
+ * in the manifest, then retry — the loader's dynamic import registers the message
+ * listener asynchronously, so we poll briefly until it responds.
+ */
+async function activateOverlay(tabId: number) {
+  try {
+    await chrome.tabs.sendMessage(tabId, { type: 'ACTIVATE_OVERLAY' });
+    return;
+  } catch {
+    // No receiving end yet — fall through to inject.
+  }
+
+  const contentScript = chrome.runtime.getManifest().content_scripts?.[0];
+  if (!contentScript?.js?.length) {
+    console.error('AgentEcho: no content script declared in manifest');
+    return;
+  }
+
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: contentScript.js,
+    });
+  } catch (e) {
+    // Restricted pages (chrome://, the Web Store, PDF viewer, etc.) cannot be injected.
+    console.error('AgentEcho: cannot inject into this page', e);
+    return;
+  }
+
+  for (let attempt = 0; attempt < 20; attempt++) {
+    try {
+      await chrome.tabs.sendMessage(tabId, { type: 'ACTIVATE_OVERLAY' });
+      return;
+    } catch {
+      await new Promise((r) => setTimeout(r, 100));
+    }
+  }
+  console.error('AgentEcho: content script never became ready');
+}
 
 settingsInputs.markerColor?.addEventListener('input', async (e) => {
   await saveSetting('markerColor', (e.target as HTMLInputElement).value);
