@@ -1,6 +1,7 @@
 import type { ExtensionSettings, FeedbackItem } from './types';
+import { DEFAULT_SETTINGS } from './types';
 
-const SETTINGS_KEY = 'agentecho_settings';
+export const SETTINGS_KEY = 'agentecho_settings';
 
 export function getStorageKeyForUrl(url: string): string {
   try {
@@ -14,13 +15,7 @@ export function getStorageKeyForUrl(url: string): string {
 export async function getSettings(): Promise<ExtensionSettings> {
   return new Promise((resolve) => {
     chrome.storage.local.get([SETTINGS_KEY], (result) => {
-      resolve(result[SETTINGS_KEY] || {
-        markerColor: '#ef4444',
-        outputDetail: 'standard',
-        clearAfterCopy: false,
-        blockInteractions: false,
-        theme: 'auto',
-      });
+      resolve({ ...DEFAULT_SETTINGS, ...(result[SETTINGS_KEY] || {}) });
     });
   });
 }

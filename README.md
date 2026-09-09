@@ -116,6 +116,10 @@ If you're comfortable building from source, you can use Avanxo Feedbacks complet
 | `Delete` / `Backspace` | Clear all markers |
 | `Escape` | Exit annotation mode |
 | `Ctrl+Shift+A` | Exit annotation mode |
+| `Alt+Shift+E` (customizable) | Cycle Activate -> Pause -> Deactivate |
+
+The cycle hotkey can be changed from the popup's Settings panel by clicking the
+"Toggle Hotkey" field and pressing a new key combination.
 
 ### Toolbar Controls
 

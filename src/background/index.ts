@@ -53,6 +53,16 @@ function getTabState(tabId: number): TabState {
   return tabStates.get(tabId)!;
 }
 
+function updateBadge(tabId: number) {
+  const state = getTabState(tabId);
+  if (!state.isActive) {
+    chrome.action.setBadgeText({ tabId, text: '' });
+    return;
+  }
+  chrome.action.setBadgeText({ tabId, text: '●' });
+  chrome.action.setBadgeBackgroundColor({ tabId, color: state.isPaused ? '#f59e0b' : '#22c55e' });
+}
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // Use tabId from message payload (for popup) or from sender.tab (for content scripts)
   const tabId = message.tabId ?? sender.tab?.id;
@@ -73,6 +83,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           state.mode = 'comment';
         }
         persistTabStates();
+        updateBadge(tabId);
         sendResponse({ isActive: state.isActive });
       });
       return true;
@@ -96,6 +107,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const currentState = getTabState(tabId);
         Object.assign(currentState, message.state);
         persistTabStates();
+        updateBadge(tabId);
         sendResponse(getTabState(tabId));
       });
       return true;
