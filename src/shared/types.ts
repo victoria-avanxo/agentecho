@@ -1,3 +1,5 @@
+export type FeedbackKind = 'comment' | 'text-edit';
+
 export interface FeedbackItem {
   id: string;
   index: number;
@@ -6,6 +8,25 @@ export interface FeedbackItem {
   url: string;
   category?: 'bug' | 'improvement' | 'question' | 'design';
   element: ElementInfo;
+  /** Defaults to 'comment' when absent (feedback saved before text edits existed). */
+  kind?: FeedbackKind;
+  /** Only present when kind === 'text-edit'. */
+  textEdit?: TextEditInfo;
+}
+
+/**
+ * A literal copy change made inline on the page. Only text is captured -
+ * styles, classes and markup are never part of a text edit.
+ */
+export interface TextEditInfo {
+  originalText: string;
+  newText: string;
+  /**
+   * Index of the edited text run among its parent's non-empty text nodes.
+   * Absent means the whole element's text was edited (the only shape that
+   * existed before inline markup was supported).
+   */
+  textNodeIndex?: number;
 }
 
 export interface ElementInfo {
@@ -35,11 +56,14 @@ export interface ExtensionSettings {
   theme: 'light' | 'dark' | 'auto';
 }
 
+export type OverlayMode = 'comment' | 'text';
+
 export interface ExtensionState {
   isActive: boolean;
   isPaused: boolean;
   markersVisible: boolean;
   currentUrl: string;
+  mode?: OverlayMode;
 }
 
 export type Message =
@@ -56,9 +80,12 @@ export type Message =
   | { type: 'REMOVE_FEEDBACK'; id: string }
   | { type: 'UPDATE_FEEDBACK'; id: string; updates: Partial<FeedbackItem> }
   | { type: 'COPY_FEEDBACK'; url: string }
+  | { type: 'DOWNLOAD_FEEDBACK' }
   | { type: 'CLEAR_FEEDBACK' }
   | { type: 'TOGGLE_MARKERS' }
-  | { type: 'TOGGLE_PAUSE' };
+  | { type: 'TOGGLE_PAUSE' }
+  | { type: 'SET_MODE'; mode: OverlayMode }
+  | { type: 'REVERT_TEXT_EDIT'; id: string };
 
 export const DEFAULT_SETTINGS: ExtensionSettings = {
   markerColor: '#ef4444',
