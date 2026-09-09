@@ -54,6 +54,7 @@ export interface ExtensionSettings {
   clearAfterCopy: boolean;
   blockInteractions: boolean;
   theme: 'light' | 'dark' | 'auto';
+  toggleHotkey: string;
 }
 
 export type OverlayMode = 'comment' | 'text';
@@ -93,4 +94,5 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
   clearAfterCopy: false,
   blockInteractions: false,
   theme: 'auto',
+  toggleHotkey: 'Alt+Shift+E',
 };

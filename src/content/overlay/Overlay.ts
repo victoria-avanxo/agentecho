@@ -50,7 +50,7 @@ export class Overlay {
   private feedbackManager: FeedbackManager;
   private settings: ExtensionSettings;
   public isActive = false;
-  private isPaused = false;
+  public isPaused = false;
   private markersVisible = true;
   private targetElement: HTMLElement | null = null;
   private isModalOpen = false;

@@ -1,5 +1,6 @@
 import type { ExtensionSettings } from '../shared/types';
 import { sendMessage } from '../shared/messaging';
+import { formatHotkeyFromEvent } from '../shared/hotkey';
 
 let currentTabId: number | null = null;
 let isActive = false;
@@ -14,6 +15,10 @@ const settingsInputs = {
   clearAfterCopy: document.getElementById('clearAfterCopy') as HTMLInputElement,
   blockInteractions: document.getElementById('blockInteractions') as HTMLInputElement,
 };
+
+const hotkeyBtn = document.getElementById('toggleHotkey') as HTMLButtonElement;
+let isRecordingHotkey = false;
+let savedHotkey = '';
 
 async function init() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -45,6 +50,8 @@ function loadSettings(settings: ExtensionSettings) {
   if (settingsInputs.theme) settingsInputs.theme.value = settings.theme;
   if (settingsInputs.clearAfterCopy) settingsInputs.clearAfterCopy.checked = settings.clearAfterCopy;
   if (settingsInputs.blockInteractions) settingsInputs.blockInteractions.checked = settings.blockInteractions;
+  savedHotkey = settings.toggleHotkey;
+  if (hotkeyBtn) hotkeyBtn.textContent = savedHotkey;
 }
 
 async function saveSetting(key: keyof ExtensionSettings, value: unknown) {
@@ -131,5 +138,45 @@ settingsInputs.clearAfterCopy?.addEventListener('change', async (e) => {
 settingsInputs.blockInteractions?.addEventListener('change', async (e) => {
   await saveSetting('blockInteractions', (e.target as HTMLInputElement).checked);
 });
+
+function stopRecordingHotkey() {
+  isRecordingHotkey = false;
+  hotkeyBtn?.classList.remove('recording');
+  if (hotkeyBtn) hotkeyBtn.textContent = savedHotkey;
+}
+
+hotkeyBtn?.addEventListener('click', () => {
+  if (isRecordingHotkey) return;
+
+  isRecordingHotkey = true;
+  hotkeyBtn.classList.add('recording');
+  hotkeyBtn.textContent = 'Press a key combo...';
+});
+
+hotkeyBtn?.addEventListener('keydown', async (e) => {
+  if (!isRecordingHotkey) return;
+  e.preventDefault();
+  e.stopPropagation();
+
+  if (e.key === 'Escape') {
+    stopRecordingHotkey();
+    return;
+  }
+
+  const combo = formatHotkeyFromEvent(e);
+  if (!combo) return;
+
+  const hasModifier = e.ctrlKey || e.altKey || e.shiftKey || e.metaKey;
+  if (!hasModifier && e.key.length === 1) {
+    hotkeyBtn.textContent = 'Must include a modifier key';
+    return;
+  }
+
+  savedHotkey = combo;
+  await saveSetting('toggleHotkey', combo);
+  stopRecordingHotkey();
+});
+
+hotkeyBtn?.addEventListener('blur', stopRecordingHotkey);
 
 init();

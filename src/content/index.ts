@@ -1,7 +1,8 @@
 import { Overlay } from './overlay/Overlay';
 import { FeedbackManager } from './feedback/FeedbackManager';
-import { getSettings, getFeedback } from '../shared/storage';
+import { getSettings, getFeedback, SETTINGS_KEY } from '../shared/storage';
 import { sendMessage } from '../shared/messaging';
+import { eventMatchesHotkey } from '../shared/hotkey';
 import type { OverlayMode } from '../shared/types';
 
 interface RestoredState {
@@ -14,6 +15,17 @@ interface RestoredState {
 let overlay: Overlay | null = null;
 let feedbackManager: FeedbackManager | null = null;
 let currentUrl: string = window.location.href;
+let toggleHotkey = 'Alt+Shift+E';
+
+getSettings().then((settings) => {
+  toggleHotkey = settings.toggleHotkey;
+});
+
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName !== 'local' || !changes[SETTINGS_KEY]) return;
+  const newHotkey = changes[SETTINGS_KEY].newValue?.toggleHotkey;
+  if (newHotkey) toggleHotkey = newHotkey;
+});
 
 async function initializeOverlay(restore?: Partial<RestoredState>) {
   if (overlay) return;
@@ -204,7 +216,30 @@ function isTypingContext(): boolean {
   );
 }
 
+async function cycleActivationState() {
+  try {
+    if (!overlay) {
+      await initializeOverlay();
+      await sendMessage({ type: 'SET_STATE', state: { isActive: true, isPaused: false } });
+    } else if (!overlay.isPaused) {
+      overlay.togglePause();
+      await sendMessage({ type: 'SET_STATE', state: { isPaused: true } });
+    } else {
+      deactivateOverlay();
+      await sendMessage({ type: 'SET_STATE', state: { isActive: false, isPaused: false } });
+    }
+  } catch (e) {
+    console.error('Avanxo Feedbacks: hotkey toggle failed', e);
+  }
+}
+
 document.addEventListener('keydown', (e) => {
+  if (eventMatchesHotkey(e, toggleHotkey)) {
+    e.preventDefault();
+    cycleActivationState();
+    return;
+  }
+
   if (!overlay?.isActive) return;
 
   // While the user is typing - including an inline text edit - single-key
