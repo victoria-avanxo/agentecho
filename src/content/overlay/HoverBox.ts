@@ -27,7 +27,19 @@ export class HoverBox {
     if (this.currentElement === target) return;
 
     this.currentElement = target;
-    const rect = target.getBoundingClientRect();
+    this.paint(target.getBoundingClientRect());
+  }
+
+  /**
+   * Highlight an arbitrary rect - used to outline a single run of text inside
+   * an element that also contains inline markup.
+   */
+  showRect(rect: DOMRect) {
+    this.currentElement = null;
+    this.paint(rect);
+  }
+
+  private paint(rect: DOMRect) {
     const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
     const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
 
