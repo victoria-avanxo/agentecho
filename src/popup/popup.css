@@ -1,20 +1,33 @@
+/* ============================================================
+   Avanxo Feedbacks — Popup styles
+   Navi / electric-blue theme, compact & premium.
+   NO behaviour changes: class/ID hooks used by popup.ts are
+   preserved exactly (toggle-btn, btn-text, status-indicator,
+   active, recording, checkbox-label, color-input, select-input,
+   hotkey-input).
+   ============================================================ */
+
 :root {
-  --primary-color: #3b82f6;
+  color-scheme: dark;
+
+  /* Avanxo palette */
+  --bg: #071426;
+  --surface: #0d1b2d;
+  --surface-hover: #11223a;
+  --primary: #1769ff;
+  --primary-glow: rgba(23, 105, 255, 0.14);
+  --text: #f7f9fc;
+  --text-secondary: #8797b2;
+  --border: rgba(109, 143, 196, 0.22);
+  --border-strong: rgba(120, 160, 220, 0.3);
+
+  /* functional (unchanged semantics) */
   --danger-color: #ef4444;
   --success-color: #22c55e;
-  --bg-color: #ffffff;
-  --text-color: #1f2937;
-  --border-color: #e5e7eb;
-  --hover-bg: #f9fafb;
-}
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg-color: #1f2937;
-    --text-color: #f9fafb;
-    --border-color: #374151;
-    --hover-bg: #374151;
-  }
+  --radius-input: 8px;
+  --radius-btn: 8px;
+  --font-stack: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
 * {
@@ -23,129 +36,237 @@
   padding: 0;
 }
 
+html,
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  font-size: 14px;
-  color: var(--text-color);
-  background: var(--bg-color);
+  background: var(--bg);
+}
+
+body {
+  font-family: var(--font-stack);
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text);
   min-width: 300px;
-  max-width: 400px;
+  background:
+    radial-gradient(circle at 92% -4%, rgba(23, 107, 255, 0.10), transparent 36%),
+    linear-gradient(180deg, #09182b 0%, #071321 100%);
+  background-attachment: fixed;
+}
+
+/* subtle space dust (very light, decorative only) */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    radial-gradient(1px 1px at 18% 22%, rgba(255, 255, 255, 0.06), transparent),
+    radial-gradient(1px 1px at 70% 12%, rgba(255, 255, 255, 0.05), transparent),
+    radial-gradient(1px 1px at 84% 42%, rgba(255, 255, 255, 0.04), transparent),
+    radial-gradient(1.5px 1.5px at 30% 64%, rgba(120, 160, 220, 0.05), transparent),
+    radial-gradient(1px 1px at 56% 82%, rgba(255, 255, 255, 0.04), transparent);
+  background-repeat: no-repeat;
 }
 
 .container {
+  position: relative;
   padding: 16px;
 }
+
+/* ---------- Header ---------- */
 
 .header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 16px;
+  gap: 12px;
+  margin-bottom: 14px;
   padding-bottom: 12px;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border);
 }
 
 .title {
-  font-size: 18px;
-  font-weight: 600;
+  font-size: 16px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--text);
+  white-space: nowrap;
 }
 
 .version {
-  font-size: 12px;
-  color: #6b7280;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 3px 7px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
+
+/* ---------- Main ---------- */
 
 .main-content {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 18px;
 }
+
+/* ---------- Primary toggle button ---------- */
 
 .toggle-btn {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   width: 100%;
-  padding: 12px 16px;
-  font-size: 15px;
-  font-weight: 500;
-  color: var(--text-color);
-  background: var(--bg-color);
-  border: 2px solid var(--border-color);
-  border-radius: 8px;
+  height: 44px;
+  padding: 0 14px;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  color: var(--text);
+  background: linear-gradient(180deg, #10223a 0%, #0d1b2d 100%);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-btn);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: border-color 150ms ease, background 150ms ease, box-shadow 150ms ease;
 }
 
 .toggle-btn:hover {
-  border-color: var(--primary-color);
-  background: var(--hover-bg);
+  background: var(--surface-hover);
+  border-color: var(--primary);
 }
 
 .toggle-btn.active {
-  border-color: var(--success-color);
-  color: var(--success-color);
+  background: linear-gradient(180deg, #1769ff 0%, #1466db 100%);
+  border-color: transparent;
+  color: #ffffff;
+  box-shadow: 0 0 0 2px var(--primary-glow);
 }
 
 .status-indicator {
-  width: 10px;
-  height: 10px;
+  width: 9px;
+  height: 9px;
   border-radius: 50%;
   background: var(--danger-color);
-  transition: background 0.2s;
+  box-shadow: 0 0 6px rgba(239, 68, 68, 0.55);
+  flex-shrink: 0;
+  transition: background 150ms ease, box-shadow 150ms ease;
 }
 
 .toggle-btn.active .status-indicator {
   background: var(--success-color);
+  box-shadow: 0 0 6px rgba(34, 197, 94, 0.55);
 }
 
 .btn-text {
   flex: 1;
   text-align: left;
+  white-space: nowrap;
 }
+
+/* ---------- Settings ---------- */
 
 .settings-section {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 4px;
 }
 
 .settings-title {
-  font-size: 14px;
+  font-size: 11px;
   font-weight: 600;
-  color: #6b7280;
+  color: var(--text-secondary);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.12em;
+  margin-bottom: 6px;
 }
 
 .setting-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 0;
+  gap: 12px;
+  min-height: 42px;
+  border-bottom: 1px solid rgba(109, 143, 196, 0.10);
+  transition: border-color 150ms ease;
+}
+
+.setting-item:last-child {
+  border-bottom: none;
 }
 
 .setting-item > label {
+  font-size: 13px;
   font-weight: 500;
+  color: var(--text);
 }
 
-.color-input {
-  width: 50px;
-  height: 32px;
-  border: 1px solid var(--border-color);
-  border-radius: 4px;
-  cursor: pointer;
+/* ---------- Controls (shared) ---------- */
+
+.color-input,
+.select-input,
+.hotkey-input {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-input);
+  font-family: inherit;
+  transition: border-color 150ms ease, background 150ms ease, box-shadow 150ms ease;
 }
+
+.color-input:focus,
+.select-input:focus,
+.hotkey-input:focus,
+.toggle-btn:focus-visible {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px var(--primary-glow);
+}
+
+/* ---------- Marker color swatch ---------- */
+
+.color-input {
+  width: 36px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.color-input::-webkit-color-swatch-wrapper {
+  padding: 2px;
+}
+
+.color-input::-webkit-color-swatch {
+  border: none;
+  border-radius: 4px;
+}
+
+.color-input:hover {
+  border-color: var(--primary);
+}
+
+/* ---------- Selects ---------- */
 
 .select-input {
   padding: 6px 10px;
-  font-size: 14px;
-  color: var(--text-color);
-  background: var(--bg-color);
-  border: 1px solid var(--border-color);
-  border-radius: 4px;
+  font-size: 12px;
   cursor: pointer;
+  min-width: 118px;
 }
+
+.select-input:hover {
+  border-color: var(--primary);
+}
+
+/* ---------- Checkboxes ---------- */
 
 .setting-item.checkbox {
   justify-content: flex-start;
@@ -154,35 +275,102 @@ body {
 .checkbox-label {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
   cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  width: 100%;
 }
+
+/* ---------- Checkbox box ---------- */
 
 .checkbox-label input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
   width: 16px;
   height: 16px;
+  margin: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.03);
   cursor: pointer;
+  position: relative;
+  flex-shrink: 0;
+  transition: border-color 150ms ease, background 150ms ease, box-shadow 150ms ease;
 }
 
+.checkbox-label input[type="checkbox"]:hover {
+  border-color: var(--primary);
+}
+
+.checkbox-label input[type="checkbox"]:focus-visible {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px var(--primary-glow);
+}
+
+.checkbox-label input[type="checkbox"]:checked {
+  background: var(--primary);
+  border-color: var(--primary);
+}
+
+.checkbox-label input[type="checkbox"]:checked::after {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 1.5px;
+  width: 4px;
+  height: 8px;
+  border: solid #ffffff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+/* ---------- Hotkey keycap ---------- */
+
 .hotkey-input {
-  min-width: 120px;
-  padding: 6px 10px;
-  font-size: 13px;
-  font-family: inherit;
-  color: var(--text-color);
-  background: var(--bg-color);
-  border: 1px solid var(--border-color);
-  border-radius: 4px;
-  cursor: pointer;
+  min-width: 118px;
+  padding: 7px 10px;
+  font-size: 12px;
+  font-weight: 500;
   text-align: center;
+  cursor: pointer;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(100, 140, 200, 0.25);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .hotkey-input:hover {
-  border-color: var(--primary-color);
+  border-color: var(--primary);
 }
 
 .hotkey-input.recording {
-  color: var(--primary-color);
-  border-color: var(--primary-color);
+  color: var(--primary);
+  border-color: var(--primary);
   border-style: dashed;
+  background: rgba(23, 105, 255, 0.06);
+}
+
+/* ---------- Keyboard focus helper (explicit) ---------- */
+
+.setting-item > label:focus-visible {
+  outline: none;
+}
+
+/* ---------- Reduced motion ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .toggle-btn,
+  .select-input,
+  .color-input,
+  .hotkey-input,
+  .checkbox-label input[type="checkbox"],
+  .status-indicator {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
 }

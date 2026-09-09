@@ -229,6 +229,19 @@ npm run generate-icons
 
 ---
 
+## Fork Changelog
+
+Changes made in the **Avanxo Feedbacks** fork on top of upstream AgentEcho:
+
+- **Rebrand**: extension name, popup title, report header, README, and privacy/contact updated to Avanxo Feedbacks (visible text in English).
+- **Already-open tabs fix**: content script is injected on demand when activating on a tab that was open before the extension loaded (upstream PR #1).
+- **Customizable hotkey**: configurable key to cycle activate → pause → deactivate, with toolbar badge state (upstream PR #3).
+- **Inline text editing**: edit page text directly, Before/After entries in the Markdown report, overlay restore on reload, and `.txt` download.
+- **Avanxo popup UI redesign**: dark navy theme (`#071426`) with electric-blue accent (`#1769ff`), Inter typography, AA/AAA contrast, visible focus states, and reduced-motion support. CSS-only; no behavior changes.
+- **Avanxo extension icon**: new icon asset (`assets/icon-extension.png`, 1254×1254) with generated 16/32/48/128 PNGs.
+
+---
+
 ## Attribution
 
 **Avanxo Feedbacks** is a fork of [AgentEcho](https://github.com/Areshkew/agentecho) by **Areshkew**, modified and rebranded for client feedback delivery. All changes retain the original copyright and are licensed under the same [Polyform Noncommercial 1.0.0](LICENSE.md) terms.
